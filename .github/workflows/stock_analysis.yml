@@ -1,57 +1,60 @@
-# 工作流名称（在GitHub Actions页面显示）
-name: 每日股票分析自动运行
+# 适配 daily_stock_analysis 官方规范的工作流配置
+name: 每日股票分析
 
-# 触发条件：定时触发 + 手动触发
+# 触发规则：手动触发 + 工作日18:00（北京时间）自动触发（项目默认规则）
 on:
-  # 手动触发（在Actions页面点「Run workflow」就能运行）
-  workflow_dispatch:
-  # 定时触发（Cron表达式，时区是UTC！UTC+8=北京时间，所以想北京时间18点运行，UTC是10点）
+  workflow_dispatch:  # 手动触发（测试用）
   schedule:
-    - cron: '0 10 * * *'  # 格式：分 时 日 月 周 → 每天UTC10点（北京时间18点）运行
+    - cron: '0 10 * * 1-5'  # 周一到周五 UTC 10点 = 北京时间18点（A股交易日）
 
-# 要执行的任务
 jobs:
-  run-stock-analysis:
-    # 运行环境：选Ubuntu最新版（GitHub提供的虚拟机）
+  stock-analysis:
     runs-on: ubuntu-latest
-    
-    # 任务步骤
     steps:
-      # 步骤1：把仓库代码拉到虚拟机中
-      - name: 拉取仓库代码
-        uses: actions/checkout@v4  # 官方的「拉取代码」动作
+      # 1. 拉取仓库代码（项目官方必选步骤）
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      # 步骤2：设置Python环境（匹配项目需要的版本，比如3.9）
-      - name: 设置Python 3.9
+      # 2. 配置Python环境（项目要求3.10+）
+      - name: Set up Python 3.10+
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'  # 可改成3.8+/3.10+，和项目兼容即可
+          python-version: '3.10'
+          cache: 'pip'  # 缓存依赖，加速运行（项目推荐）
 
-      # 步骤3：安装项目依赖
-      - name: 安装依赖
+      # 3. 安装项目依赖（直接用项目官方的requirements.txt）
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # 如果项目有requirements.txt，执行下面这行；没有就手动写依赖（比如tushare akshare）
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install pandas tushare akshare matplotlib; fi
+          pip install -r requirements.txt
 
-      # 步骤4：配置Tushare Token（关键！替换成你的Token）
-      - name: 设置环境变量（Tushare Token）
+      # 4. 执行分析脚本（核心步骤，注入所有已配置的Secrets）
+      - name: Run daily stock analysis
         env:
-          TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}  # 从GitHub Secrets读取Token（避免硬编码）
+          # AI模型（你已配置Gemini）
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # 新闻源（你已配置Anspire，项目要求复数形式_KEYS）
+          ANSPIRE_API_KEYS: ${{ secrets.ANSPIRE_API_KEY }}
+          # 自选股（必填，项目官方命名）
+          STOCK_LIST: ${{ secrets.STOCK_LIST }}
+          # 邮箱通知（你已配置QQ邮箱，对齐项目官方命名）
+          EMAIL_SENDER: ${{ secrets.QQ_EMAIL }}
+          EMAIL_PASSWORD: ${{ secrets.QQ_EMAIL_AUTH_CODE }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+          # 可选：指定默认AI模型（适配项目的LLM路由）
+          DEFAULT_MODEL: "gemini/gemini-pro"
         run: |
-          # 把Token写入项目的配置文件（假设项目有config.py，没有就直接在脚本里读环境变量）
-          echo "TUSHARE_TOKEN = '$TUSHARE_TOKEN'" > config.py
+          # 执行项目官方主脚本，启用调试模式（方便排查问题）
+          python main.py --debug
 
-      # 步骤5：运行股票分析脚本（替换成你项目的主脚本名，比如main.py）
-      - name: 执行分析脚本
-        run: |
-          python main.py
-
-      # （可选）步骤6：把运行结果保存回仓库（比如分析后的CSV/图片）
-      - name: 提交并推送结果
+      # 5. 推送分析报告到仓库（保存历史记录，项目推荐可选步骤）
+      - name: Push analysis reports
+        if: success()  # 仅分析成功时执行
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          git add .  # 添加所有修改的文件（如结果文件）
-          git commit -m "Auto update stock analysis result $(date +'%Y-%m-%d')" || echo "No changes to commit"
-          git push
+          # 添加项目默认生成的reports目录下的报告
+          git add reports/ || echo "No report files to commit"
+          # 提交（无变更则跳过）
+          git commit -m "Auto update: Stock analysis report $(date +'%Y-%m-%d')" || echo "No changes to commit"
+          git push || echo "Push skipped (no new changes)"
