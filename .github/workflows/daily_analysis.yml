@@ -12,7 +12,7 @@ jobs:
       - name: 拉取仓库代码
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 解决推送冲突
+          fetch-depth: 0  # 解决浅克隆冲突
 
       - name: 设置Python 3.10+
         uses: actions/setup-python@v5
@@ -23,38 +23,26 @@ jobs:
       - name: 安装依赖
         run: pip install --upgrade pip && pip install -r requirements.txt
 
-      - name: 执行分析（强制指定Anspire/TickFlow）
+      - name: 执行分析
         env:
-          # ===== 关键：强制指定搜索服务商为Anspire =====
-          SEARCH_PROVIDER: "anspire"  # 覆盖默认的searxng
-          ANSPIRE_API_KEY: ${{ secrets.ANSPIRE_API_KEY }}
-          
-          # ===== 关键：强制指定数据源为TickFlow =====
-          DATA_PROVIDER: "tickflow"  # 覆盖默认数据源
-          TICKFLOW_API_KEY: ${{ secrets.TICKFLOW_API_KEY }}
-          
-          # 其他配置
+          # 股票配置
           STOCK_LIST: ${{ secrets.STOCK_LIST }}
           QQ_EMAIL: ${{ secrets.QQ_EMAIL }}
           QQ_EMAIL_AUTH_CODE: ${{ secrets.QQ_EMAIL_AUTH_CODE }}
           EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
           ENABLE_REALTIME_QUOTE: ${{ secrets.ENABLE_REALTIME_QUOTE }}
         run: |
-          # 执行脚本并保存日志
           python main.py --debug > analysis_log.txt 2>&1
-          cat analysis_log.txt | head -200  # 显示更多日志
+          cat analysis_log.txt | head -200
 
-      # 5. 推送分析报告到仓库（复用你的成功逻辑，修复.gitignore忽略问题）
-      - name: 推送日志到仓库
-        if: success()  # 仅分析成功时执行
+      # 修复权限的推送步骤
+      - name: Push analysis reports
+        if: success()
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          # 核心修复：-f 强制添加被.gitignore忽略的reports目录
           git add -f reports/ || echo "No report files to commit"
-          # 若需要保留日志文件，同样用-f强制添加（可选，不需要可删除这行）
           git add -f analysis_log.txt || echo "No log file to commit"
-          # 提交（无变更则跳过，复用你的成功命令）
           git commit -m "Auto update: Stock analysis report $(date +'%Y-%m-%d')" || echo "No changes to commit"
-          # 复用你能成功的推送命令（去掉冗余的授权拼接）
-          git push || echo "Push skipped (no new changes)"
+          # 用GITHUB_TOKEN授权推送
+          git push https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref }} || echo "Push skipped (no new changes)"
