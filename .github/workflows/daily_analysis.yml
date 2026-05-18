@@ -44,17 +44,17 @@ jobs:
           python main.py --debug > analysis_log.txt 2>&1
           cat analysis_log.txt | head -200  # 显示更多日志
 
-      - name: 推送报告和日志到仓库
-        if: always()
+      # 5. 推送分析报告到仓库（复用你的成功逻辑，修复.gitignore忽略问题）
+      - name: 推送日志到仓库
+        if: success()  # 仅分析成功时执行
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          # 确保reports目录存在（防止空目录不提交）
-          mkdir -p reports
-          touch reports/.gitkeep  # 空目录提交占位符
-          # 添加所有生成的文件
-          git add reports/ analysis_log.txt
-          # 提交（避免重复提交）
-          git commit -m "Auto update: 分析报告_$(date +'%Y-%m-%d_%H%M%S')" || echo "无新内容"
-          # 推送（用内置token授权）
-          git push https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref }} || echo "推送失败"
+          # 核心修复：-f 强制添加被.gitignore忽略的reports目录
+          git add -f reports/ || echo "No report files to commit"
+          # 若需要保留日志文件，同样用-f强制添加（可选，不需要可删除这行）
+          git add -f analysis_log.txt || echo "No log file to commit"
+          # 提交（无变更则跳过，复用你的成功命令）
+          git commit -m "Auto update: Stock analysis report $(date +'%Y-%m-%d')" || echo "No changes to commit"
+          # 复用你能成功的推送命令（去掉冗余的授权拼接）
+          git push || echo "Push skipped (no new changes)"
