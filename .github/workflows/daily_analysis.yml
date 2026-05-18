@@ -31,6 +31,7 @@ jobs:
           QQ_EMAIL_AUTH_CODE: ${{ secrets.QQ_EMAIL_AUTH_CODE }}
           EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
           ENABLE_REALTIME_QUOTE: ${{ secrets.ENABLE_REALTIME_QUOTE }}
+          ENABLE_STOCK_DETAIL_ANALYSIS: "true"
         run: |
           python main.py --debug > analysis_log.txt 2>&1
           cat analysis_log.txt | head -200
