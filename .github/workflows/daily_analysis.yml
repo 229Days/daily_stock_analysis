@@ -1,6 +1,5 @@
 name: 每日股票分析
 
-# 触发规则完全对齐项目官方：手动触发 + 工作日18点（UTC 10点）
 on:
   workflow_dispatch:
   schedule:
@@ -19,22 +18,23 @@ jobs:
           python-version: '3.10'
           cache: 'pip'
 
-      - name: 安装项目依赖
+      - name: 安装依赖
         run: pip install --upgrade pip && pip install -r requirements.txt
 
-      - name: 执行股票分析（仅注入Secrets，其余逻辑项目内置）
+      - name: 执行分析（注入所有Secrets到环境变量）
         env:
-          # AI模型（你已配置Gemini）
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          # 新闻源（项目官方要求复数形式 ANSPIRE_API_KEYS）
-          ANSPIRE_API_KEYS: ${{ secrets.ANSPIRE_API_KEY }}
-          # 自选股（必填）
+          # 1. Anspire 搜索服务（代码侧默认读取的变量名）
+          ANSPIRE_API_KEY: ${{ secrets.ANSPIRE_API_KEY }}  # 直接用你配置的Secret名
+          ENABLE_ANSPIRE_SEARCH: "True"  # 关键：启用Anspire搜索（代码侧开关）
+          
+          # 2. TickFlow 数据源（代码侧默认读取的变量名）
+          TICKFLOW_API_KEY: ${{ secrets.TICKFLOW_API_KEY }}  # 你配置的Secret名
+          ENABLE_TICKFLOW_DATA: "True"  # 关键：启用TickFlow数据源（代码侧开关）
+          
+          # 3. 其他已配置的Secret
           STOCK_LIST: ${{ secrets.STOCK_LIST }}
-          # 邮箱通知（项目官方命名：EMAIL_SENDER/EMAIL_PASSWORD）
-          EMAIL_SENDER: ${{ secrets.QQ_EMAIL }}
-          EMAIL_PASSWORD: ${{ secrets.QQ_EMAIL_AUTH_CODE }}
+          QQ_EMAIL: ${{ secrets.QQ_EMAIL }}
+          QQ_EMAIL_AUTH_CODE: ${{ secrets.QQ_EMAIL_AUTH_CODE }}
           EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
-          # 你的额外配置（TickFlow/实时行情）
-          TICKFLOW_API_KEY: ${{ secrets.TICKFLOW_API_KEY }}
           ENABLE_REALTIME_QUOTE: ${{ secrets.ENABLE_REALTIME_QUOTE }}
         run: python main.py --debug
