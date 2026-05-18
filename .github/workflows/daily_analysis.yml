@@ -12,7 +12,7 @@ jobs:
       - name: 拉取仓库代码
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 关键：拉取完整仓库历史，避免提交冲突
+          fetch-depth: 0  # 解决推送冲突
 
       - name: 设置Python 3.10+
         uses: actions/setup-python@v5
@@ -23,14 +23,16 @@ jobs:
       - name: 安装依赖
         run: pip install --upgrade pip && pip install -r requirements.txt
 
-      - name: 执行分析（注入所有Secrets到环境变量）
+      - name: 执行分析（强制指定Anspire/TickFlow）
         env:
-          # Anspire 搜索服务
+          # ===== 关键：强制指定搜索服务商为Anspire =====
+          SEARCH_PROVIDER: "anspire"  # 覆盖默认的searxng
           ANSPIRE_API_KEY: ${{ secrets.ANSPIRE_API_KEY }}
-          ENABLE_ANSPIRE_SEARCH: "True"
-          # TickFlow 数据源
+          
+          # ===== 关键：强制指定数据源为TickFlow =====
+          DATA_PROVIDER: "tickflow"  # 覆盖默认数据源
           TICKFLOW_API_KEY: ${{ secrets.TICKFLOW_API_KEY }}
-          ENABLE_TICKFLOW_DATA: "True"
+          
           # 其他配置
           STOCK_LIST: ${{ secrets.STOCK_LIST }}
           QQ_EMAIL: ${{ secrets.QQ_EMAIL }}
@@ -38,21 +40,21 @@ jobs:
           EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
           ENABLE_REALTIME_QUOTE: ${{ secrets.ENABLE_REALTIME_QUOTE }}
         run: |
-          # 执行脚本并输出日志到文件（方便排查）
+          # 执行脚本并保存日志
           python main.py --debug > analysis_log.txt 2>&1
-          # 查看日志前100行（确认执行结果）
-          cat analysis_log.txt | head -100
+          cat analysis_log.txt | head -200  # 显示更多日志
 
-      # ========== 新增：推送报告/日志到仓库 ==========
       - name: 推送报告和日志到仓库
-        if: always()  # 无论执行成功/失败，都推送日志
+        if: always()
         run: |
-          # 配置git用户（必须）
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          # 添加所有生成的文件（报告+日志）
-          git add reports/ analysis_log.txt || echo "无报告/日志文件"
-          # 提交（无变更则跳过）
-          git commit -m "Auto update: 股票分析报告_$(date +'%Y-%m-%d_%H%M%S')" || echo "无新内容可提交"
-          # 推送（解决权限问题）
-          git push https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref }} || echo "推送失败（无新内容）"
+          # 确保reports目录存在（防止空目录不提交）
+          mkdir -p reports
+          touch reports/.gitkeep  # 空目录提交占位符
+          # 添加所有生成的文件
+          git add reports/ analysis_log.txt
+          # 提交（避免重复提交）
+          git commit -m "Auto update: 分析报告_$(date +'%Y-%m-%d_%H%M%S')" || echo "无新内容"
+          # 推送（用内置token授权）
+          git push https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref }} || echo "推送失败"
